@@ -383,6 +383,15 @@ details[open] summary .chev{transform:rotate(90deg);}
     </details>
   </div>
 
+  <div class="card">
+    <details class="help">
+      <summary>🔧 진단 정보 (저장 문제 확인용) <span class="chev">▸</span></summary>
+      <div class="help-list" id="diagInfo" style="font-size:13px;line-height:1.9;"></div>
+      <button class="testbtn" id="diagRawBtn" type="button" style="margin-top:4px;">저장된 원본 데이터 보기</button>
+      <textarea id="diagRaw" readonly rows="4" style="width:100%;margin-top:8px;font-size:11px;font-family:monospace;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);border-radius:9px;padding:8px;" hidden></textarea>
+    </details>
+  </div>
+
 </div>
 
 <div class="alarm-overlay" id="alarmOverlay" hidden role="alertdialog" aria-live="assertive">
@@ -876,6 +885,7 @@ details[open] summary .chev{transform:rotate(90deg);}
       elStopsList.appendChild(card);
       stopEls[s.id] = {card: card, dist: distEl};
     });
+    renderDiag();
   }
 
   function updateStopCardDistances(){
@@ -1123,12 +1133,44 @@ details[open] summary .chev{transform:rotate(90deg);}
     }
   });
 
+  var elDiagInfo = $("diagInfo");
+  var elDiagRawBtn = $("diagRawBtn");
+  var elDiagRaw = $("diagRaw");
+
+  function renderDiag(){
+    if(!elDiagInfo) return;
+    var standalone = false;
+    try{
+      standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+    }catch(e){}
+    var routeLocs = state.locations[state.route] || {};
+    var registeredCount = Object.keys(routeLocs).length;
+    var totalStops = currentStops().length;
+    var lines = [
+      "저장소 사용 가능: " + (STORAGE_OK ? "✅ 예" : "❌ 아니요"),
+      "실행 방식: " + (standalone ? "✅ 홈 화면 앱(독립 실행)" : "⚠ 브라우저 탭(설치 안 된 상태일 수 있음)"),
+      "현재 주소: " + location.href,
+      "현재 노선: " + state.route + " (" + ROUTES[state.route].label + ")",
+      "이 노선 등록된 정류장: " + registeredCount + " / " + totalStops
+    ];
+    elDiagInfo.innerHTML = lines.map(function(l){ return "<div>" + l + "</div>"; }).join("");
+  }
+  if(elDiagRawBtn){
+    elDiagRawBtn.addEventListener("click", function(){
+      var raw = null;
+      try{ raw = localStorage.getItem(LOC_KEY); }catch(e){}
+      elDiagRaw.hidden = false;
+      elDiagRaw.value = raw || "(비어있음 — 아무것도 저장되어 있지 않습니다)";
+    });
+  }
+
   function renderAll(){
     renderStatusPill();
     renderRouteButtons();
     renderDayRow();
     renderStatsIdle();
     renderStops();
+    renderDiag();
   }
 
   renderAll();
