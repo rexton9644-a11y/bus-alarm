@@ -174,6 +174,7 @@ h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;margin:0;letter-spacin
 }
 .stat .k{font-size:11px;color:var(--fg-dim);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
 .stat .v{font-size:14.5px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.4;overflow-wrap:break-word;}
+.stat .v.stale{color:var(--danger);}
 .toggle-row{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
 .toggle-row span{font-size:13px;font-weight:600;color:var(--fg-dim);}
 .switch{position:relative;width:42px;height:25px;flex-shrink:0;}
@@ -330,6 +331,7 @@ details[open] summary .chev{transform:rotate(90deg);}
 <div class="wrap">
 
   <div class="banner" id="visBanner" hidden>⚠ 화면을 벗어나면 위치 갱신이 느려질 수 있어요. 앱을 켜둔 채로 유지해주세요.</div>
+  <div class="banner" id="staleBanner" hidden>⚠ 위치 정보가 오래됐어요(전화 통화·화면 전환 등으로 추적이 멈췄을 수 있어요). 이 화면을 확인하시고, 추적이 안 되고 있으면 추적을 중지 후 다시 시작해주세요.</div>
   <div class="banner" id="storageBanner" hidden>⚠ 이 화면에서는 등록 내용이 저장되지 않을 수 있어요. 홈 화면에 추가한 아이콘으로 열어주세요(텔레그램·카카오톡 등 다른 앱 안의 브라우저로 열면 저장이 안 될 수 있습니다).</div>
 
   <div class="card">
@@ -402,6 +404,7 @@ details[open] summary .chev{transform:rotate(90deg);}
         <li>가장 정확하게 하고 싶으면, 실제로 그 자리에 있을 때 <b>"현재 위치로 등록(정확)"</b>을 눌러 GPS 좌표로 덮어쓸 수 있어요. 한 번 등록해두면 다음부터는 다시 할 필요 없어요.</li>
         <li>버스가 출발하기 전, <b>탑승인원 확인</b> 카드에서 오늘 정류장별 탑승 인원을 확인하고 체크해주세요. 체크하지 않으면 추적 시작 버튼이 눌리지 않아요. 결석 처리를 바꾸거나 요일/노선을 바꾸면 체크가 자동으로 풀리니 다시 확인해주세요.</li>
         <li>버스를 타기 전 <b>추적 시작</b>을 누르고, 화면이 꺼지지 않도록 앱을 켜둔 채로 유지하세요. 다른 앱으로 완전히 전환하면 위치 갱신이 늦어질 수 있어요.</li>
+        <li>전화 통화·화면 잠금 등으로 위치가 1분 이상 갱신되지 않으면 화면에 <b>⚠ 경고 문구</b>가 뜨고 "마지막 갱신" 숫자가 빨간색으로 바뀝니다. 이 경고가 보이면 앱으로 돌아와 상태를 확인하고, 추적이 멈춘 것 같으면 추적을 중지한 뒤 다시 시작해주세요.</li>
         <li>손글씨 시간표를 옮긴 것이라 이름이 틀렸을 수 있어요. 틀린 이름은 말씀해주시면 바로 고쳐드릴게요.</li>
       </ul>
     </details>
@@ -533,6 +536,7 @@ details[open] summary .chev{transform:rotate(90deg);}
   var EXIT_FACTOR = 1.6;
   var DEFAULT_RADIUS = 120;
   var WEEKEND_FALLBACK = "금"; // 주말(현장테스트 등)엔 금요일 명단을 기본으로 보여준다
+  var STALE_MS = 60000; // 추적 중 "마지막 갱신"이 이보다 오래되면(통화·화면잠금 등으로 멈춘 것으로 보고) 경고 표시
 
   var state = {
     route: "r1",
@@ -547,6 +551,7 @@ details[open] summary .chev{transform:rotate(90deg);}
     lastPos: null,
     lastUpdate: null,
     sirenTimer: null,
+    staleTimer: null,
     vibTimer: null,
     audioCtx: null,
     fired: {},
@@ -661,6 +666,7 @@ details[open] summary .chev{transform:rotate(90deg);}
   var elBoardDayLabel = $("boardDayLabel"), elBoardTotal = $("boardTotal"), elBoardList = $("boardList");
   var elBoardConfirmChk = $("boardConfirmChk"), elBoardConfirmRow = $("boardConfirmRow"), elBoardNote = $("boardNote");
   var elVisBanner = $("visBanner");
+  var elStaleBanner = $("staleBanner");
   var elStorageBanner = $("storageBanner");
   if(!STORAGE_OK && elStorageBanner){ elStorageBanner.hidden = false; }
   var elAlarmOverlay = $("alarmOverlay"), elAlarmPlace = $("alarmPlace"), elAlarmNames = $("alarmNames"), elAlarmDismissBtn = $("alarmDismissBtn");
@@ -1129,10 +1135,22 @@ details[open] summary .chev{transform:rotate(90deg);}
       elStatNearest.textContent = "정류장 위치를 먼저 등록해주세요";
     }
     updateStopCardDistances();
+    checkStale();
   }
   function onPosError(err){
     elStatAccuracy.textContent = "오류";
     elStatNearest.textContent = "위치 오류: " + (err.message || "권한을 확인해주세요");
+  }
+
+  function checkStale(){
+    if(!state.tracking || !state.lastUpdate){
+      elStaleBanner.hidden = true;
+      elStatUpdated.classList.remove("stale");
+      return;
+    }
+    var stale = (Date.now() - state.lastUpdate) > STALE_MS;
+    elStaleBanner.hidden = !stale;
+    elStatUpdated.classList.toggle("stale", stale);
   }
 
   function startTracking(){
@@ -1150,6 +1168,8 @@ details[open] summary .chev{transform:rotate(90deg);}
     state.watchId = navigator.geolocation.watchPosition(onPosition, onPosError, {
       enableHighAccuracy:true, maximumAge:0, timeout:20000
     });
+    if(state.staleTimer){ clearInterval(state.staleTimer); }
+    state.staleTimer = setInterval(checkStale, 5000);
     elTrackBtn.classList.remove("stop");
     elTrackBtnLabel.textContent = "추적 중지";
     elTrackBtn.firstElementChild.textContent = "■";
@@ -1162,6 +1182,9 @@ details[open] summary .chev{transform:rotate(90deg);}
     state.tracking = false;
     if(state.watchId !== null){ navigator.geolocation.clearWatch(state.watchId); }
     state.watchId = null;
+    if(state.staleTimer){ clearInterval(state.staleTimer); state.staleTimer = null; }
+    elStaleBanner.hidden = true;
+    elStatUpdated.classList.remove("stale");
     releaseWakeLock();
     state.boardingConfirmed = false;
     elTrackBtn.classList.add("stop");
@@ -1209,6 +1232,7 @@ details[open] summary .chev{transform:rotate(90deg);}
       if(state.audioCtx && state.audioCtx.state === "suspended"){
         state.audioCtx.resume().catch(function(){});
       }
+      checkStale();
     }
   });
 
