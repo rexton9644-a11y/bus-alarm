@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#e2870a">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="하차알람">
 <title>하차 알람</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
@@ -227,6 +234,25 @@ h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;margin:0;letter-spacin
   border:1px solid var(--border);background:transparent;color:var(--fg);
   border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;
 }
+.addr-row{display:flex;gap:8px;margin-top:9px;}
+.addr-input{
+  flex:1;min-width:0;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);
+  border-radius:9px;padding:9px 11px;font-size:13.5px;font-family:inherit;
+}
+.addr-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.addr-btn{
+  border:none;background:var(--accent);color:var(--accent-fg);
+  border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;
+}
+.addr-btn:disabled{opacity:.6;}
+.addr-status{font-size:12px;color:var(--fg-dim);margin-top:7px;min-height:14px;}
+.addr-results{margin-top:7px;display:flex;flex-direction:column;gap:6px;}
+.addr-result{
+  border:1px solid var(--border);background:transparent;color:var(--fg);
+  border-radius:9px;padding:9px 11px;font-size:12.5px;text-align:left;cursor:pointer;line-height:1.4;
+}
+.addr-result:active{background:var(--surface-2);}
+.or-sep{font-size:11px;color:var(--fg-dim);text-align:center;margin:12px 0 2px;text-transform:uppercase;letter-spacing:.06em;}
 .roster-label{font-size:12px;color:var(--fg-dim);margin-top:11px;font-weight:600;}
 .roster{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px;}
 .chip{
@@ -337,7 +363,8 @@ details[open] summary .chev{transform:rotate(90deg);}
         <li>정류장 목록은 첨부해주신 학원버스 시간표(엑셀)를 그대로 옮겨온 것이에요. 요일을 바꾸면 그날 탑승 명단이 자동으로 바뀝니다.</li>
         <li>이름을 탭해서 <b>결석</b> 처리하면 그 원생은 오늘 하차 명단과 알람에서 빠집니다. 다시 탭하면 출석으로 돌아와요.</li>
         <li>결석 처리는 오늘 날짜 기준으로만 적용돼요. 내일 다시 열면 전원 출석으로 초기화됩니다.</li>
-        <li>정류장의 <b>위치 등록</b>은 실제로 그 자리에 있을 때 눌러야 정확해요. 등록해두면 다음부터는 다시 할 필요 없어요.</li>
+        <li>정류장 위치는 기본적으로 <b>주소나 건물명을 입력해서 찾기</b>로 등록해요. 검색 결과 중 맞는 곳을 탭하면 바로 저장됩니다.</li>
+        <li>더 정확하게 하고 싶으면, 실제로 그 자리에 있을 때 <b>"현재 위치로 등록(정확)"</b>을 눌러 GPS 좌표로 덮어쓸 수 있어요. 한 번 등록해두면 다음부터는 다시 할 필요 없어요.</li>
         <li>버스를 타기 전 <b>추적 시작</b>을 누르고, 화면이 꺼지지 않도록 앱을 켜둔 채로 유지하세요. 다른 앱으로 완전히 전환하면 위치 갱신이 늦어질 수 있어요.</li>
         <li>손글씨 시간표를 옮긴 것이라 이름이 틀렸을 수 있어요. 틀린 이름은 말씀해주시면 바로 고쳐드릴게요.</li>
       </ul>
@@ -460,6 +487,7 @@ details[open] summary .chev{transform:rotate(90deg);}
   var ROUTE_KEY = "getoff-alarm-route-v2";
   var EXIT_FACTOR = 1.6;
   var DEFAULT_RADIUS = 120;
+  var WEEKEND_FALLBACK = "금"; // 주말(현장테스트 등)엔 금요일 명단을 기본으로 보여준다
 
   var state = {
     route: "r1",
@@ -507,15 +535,21 @@ details[open] summary .chev{transform:rotate(90deg);}
   state.route = loadJSON(ROUTE_KEY, "r1");
   var info = todayInfo();
   state.dateStr = info.dateStr;
-  state.weekday = info.weekday || "월";
+  state.weekday = info.weekday || WEEKEND_FALLBACK;
 
   function currentStops(){ return ROUTES[state.route].stops; }
   function stopLoc(stopId){
     return (state.locations[state.route] || {})[stopId] || null;
   }
-  function setStopLoc(stopId, lat, lng, acc){
+  function setStopLoc(stopId, lat, lng, acc, source, label){
     if(!state.locations[state.route]) state.locations[state.route] = {};
-    state.locations[state.route][stopId] = {lat:lat, lng:lng, acc:acc, radius:DEFAULT_RADIUS};
+    var prev = stopLoc(stopId);
+    state.locations[state.route][stopId] = {
+      lat:lat, lng:lng, acc:acc,
+      radius: (prev && prev.radius) || DEFAULT_RADIUS,
+      source: source || "gps",
+      label: label || null
+    };
     saveJSON(LOC_KEY, state.locations);
   }
   function isAbsent(stopId, name){
@@ -606,9 +640,14 @@ details[open] summary .chev{transform:rotate(90deg);}
       elDayRow.appendChild(b);
     });
     var info2 = todayInfo();
-    var label = "오늘은 " + info2.dowName + "요일입니다";
-    if(info2.weekday !== state.weekday){
-      label += " · 현재 보기는 " + state.weekday + "요일 명단입니다";
+    var label;
+    if(info2.weekday){
+      label = "오늘은 " + info2.dowName + "요일입니다";
+      if(info2.weekday !== state.weekday){
+        label += " · 현재 보기는 " + state.weekday + "요일 명단입니다";
+      }
+    } else {
+      label = "오늘은 " + info2.dowName + "요일(주말)입니다 · 현장테스트용으로 " + state.weekday + "요일 명단을 기본으로 보여드려요";
     }
     elTodayLine.textContent = label + " · " + ROUTES[state.route].label;
   }
@@ -672,15 +711,81 @@ details[open] summary .chev{transform:rotate(90deg);}
       }
       card.appendChild(top);
 
+      var badge = document.createElement("span");
+      if(!loc){
+        badge.className = "gps-badge no";
+        badge.textContent = "📍 위치 미등록";
+      } else if(loc.source === "address"){
+        badge.className = "gps-badge ok";
+        badge.textContent = "📍 주소로 등록됨";
+      } else {
+        badge.className = "gps-badge ok";
+        badge.textContent = "📍 현재위치로 등록 (±" + Math.round(loc.acc||0) + "m)";
+      }
+
+      var addrRow = document.createElement("div");
+      addrRow.className = "addr-row";
+      var addrInput = document.createElement("input");
+      addrInput.type = "text";
+      addrInput.className = "addr-input";
+      addrInput.placeholder = "주소나 건물명 입력 (예: 경남 통영시 ...)";
+      if(loc && loc.source === "address" && loc.label) addrInput.value = loc.label;
+      var addrBtn = document.createElement("button");
+      addrBtn.type = "button";
+      addrBtn.className = "addr-btn";
+      addrBtn.textContent = "주소로 찾기";
+      addrRow.appendChild(addrInput);
+      addrRow.appendChild(addrBtn);
+      card.appendChild(addrRow);
+
+      var addrStatus = document.createElement("div");
+      addrStatus.className = "addr-status";
+      card.appendChild(addrStatus);
+      var addrResults = document.createElement("div");
+      addrResults.className = "addr-results";
+      card.appendChild(addrResults);
+
+      addrBtn.addEventListener("click", function(){
+        var q = addrInput.value.trim();
+        if(!q){ addrStatus.textContent = "주소를 입력해주세요."; return; }
+        addrStatus.textContent = "검색 중…";
+        addrResults.innerHTML = "";
+        addrBtn.disabled = true;
+        geocodeAddress(q, function(results){
+          addrBtn.disabled = false;
+          if(!results.length){
+            addrStatus.textContent = "검색 결과가 없어요. 더 자세히(동·건물명 포함) 입력해보세요.";
+            return;
+          }
+          addrStatus.textContent = "아래에서 가장 가까운 위치를 선택하세요.";
+          results.forEach(function(r){
+            var rb = document.createElement("button");
+            rb.type = "button";
+            rb.className = "addr-result";
+            rb.textContent = r.display_name;
+            rb.addEventListener("click", function(){
+              setStopLoc(s.id, parseFloat(r.lat), parseFloat(r.lon), null, "address", r.display_name);
+              renderStops();
+            });
+            addrResults.appendChild(rb);
+          });
+        }, function(){
+          addrBtn.disabled = false;
+          addrStatus.textContent = "검색에 실패했어요. 잠시 후 다시 시도해주세요.";
+        });
+      });
+
+      var sep = document.createElement("div");
+      sep.className = "or-sep";
+      sep.textContent = "또는";
+      card.appendChild(sep);
+
       var gpsRow = document.createElement("div");
       gpsRow.className = "gps-row";
-      var badge = document.createElement("span");
-      badge.className = "gps-badge " + (loc ? "ok" : "no");
-      badge.textContent = loc ? ("📍 등록됨 (±" + Math.round(loc.acc||0) + "m)") : "📍 위치 미등록";
       var gpsBtn = document.createElement("button");
       gpsBtn.type = "button";
       gpsBtn.className = "gps-btn";
-      gpsBtn.textContent = loc ? "다시 등록" : "현재 위치로 등록";
+      gpsBtn.textContent = (loc ? "다시 등록" : "현재 위치로 등록") + "(정확)";
       gpsBtn.addEventListener("click", function(){ registerLocation(s.id, gpsBtn, badge); });
       gpsRow.appendChild(badge);
       gpsRow.appendChild(gpsBtn);
@@ -727,13 +832,24 @@ details[open] summary .chev{transform:rotate(90deg);}
     var oldText = btn.textContent;
     btn.textContent = "확인 중…";
     navigator.geolocation.getCurrentPosition(function(pos){
-      setStopLoc(stopId, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+      setStopLoc(stopId, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, "gps", null);
       renderStops();
     }, function(err){
       alert("위치를 가져오지 못했어요 (" + (err.message || "권한을 확인해주세요") + ")");
       btn.disabled = false;
       btn.textContent = oldText;
     }, {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+  }
+
+  function geocodeAddress(query, onResults, onError){
+    var url = "https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=kr&accept-language=ko&addressdetails=0&q=" + encodeURIComponent(query);
+    fetch(url, {headers: {"Accept": "application/json"}})
+      .then(function(resp){
+        if(!resp.ok) throw new Error("HTTP " + resp.status);
+        return resp.json();
+      })
+      .then(function(data){ onResults(data || []); })
+      .catch(function(err){ onError(err); });
   }
 
   function ensureAudioCtx(){
@@ -941,6 +1057,14 @@ details[open] summary .chev{transform:rotate(90deg);}
 
   renderAll();
 })();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  });
+}
 </script>
 </body>
 </html>
