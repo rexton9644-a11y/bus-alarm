@@ -772,15 +772,19 @@ details[open] summary .chev{transform:rotate(90deg);}
         geocodeAddress(q, function(results){
           addrBtn.disabled = false;
           if(!results.length){
-            addrStatus.textContent = "검색 결과가 없어요. 더 자세히(동·건물명 포함) 입력해보세요.";
+            addrStatus.textContent = "검색 결과가 없어요(저장 안 됨). 더 자세히(동·건물명 포함) 입력하거나, 아래 \"위도, 경도 직접 입력\"을 이용해주세요.";
             return;
           }
-          addrStatus.textContent = "아래에서 가장 가까운 위치를 선택하세요.";
-          results.forEach(function(r){
+          var first = results[0];
+          setStopLoc(s.id, parseFloat(first.lat), parseFloat(first.lon), null, "address", first.display_name);
+          badge.className = "gps-badge ok";
+          badge.textContent = "📍 주소로 등록됨";
+          addrStatus.textContent = "✅ 저장됨: " + first.display_name + " (다른 곳이면 아래 목록에서 선택)";
+          results.forEach(function(r, i){
             var rb = document.createElement("button");
             rb.type = "button";
             rb.className = "addr-result";
-            rb.textContent = r.display_name;
+            rb.textContent = (i === 0 ? "✅ " : "") + r.display_name;
             rb.addEventListener("click", function(){
               setStopLoc(s.id, parseFloat(r.lat), parseFloat(r.lon), null, "address", r.display_name);
               renderStops();
