@@ -284,6 +284,13 @@ h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;margin:0;letter-spacin
 }
 .chip.absent{background:transparent;border-style:dashed;color:var(--fg-dim);text-decoration:line-through;}
 .empty-roster{font-size:12.5px;color:var(--fg-dim);margin-top:9px;font-style:italic;}
+.move-select{width:100%;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);border-radius:9px;padding:9px 11px;font-size:13.5px;font-family:inherit;margin-top:7px;}
+.move-route-row{display:flex;gap:8px;margin-top:7px;}
+.move-route-row button{flex:1;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);border-radius:11px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;}
+.move-route-row button.active{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);}
+.move-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;padding:8px 11px;border-radius:9px;background:var(--surface-2);}
+.move-row .info{flex:1;min-width:0;line-height:1.4;}
+.move-row .cancel-btn{border:1px solid var(--border);background:transparent;color:var(--fg-dim);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;}
 details.help{border:none;}
 summary{
   font-size:14px;font-weight:700;cursor:pointer;list-style:none;
@@ -393,6 +400,27 @@ details[open] summary .chev{transform:rotate(90deg);}
   </div>
 
   <div class="card">
+    <h2 class="section-title">🔁 원생 이동 · 정류장 변경</h2>
+    <p class="section-sub">원생이 다른 호차로 바뀌거나 내리는 정류장이 바뀔 때 여기서 바로 옮길 수 있어요. <b>이미 등록된 정류장들 사이에서만</b> 옮길 수 있고, 완전히 새로운 정류장을 추가하려면 말씀해주셔야 해요.</p>
+    <select class="move-select" id="moveSelect"></select>
+    <div id="moveDetail" hidden>
+      <div class="roster-label">이동할 요일 선택 (기본: 현재 배정된 요일)</div>
+      <div class="day-row" id="moveDayRow"></div>
+      <div class="roster-label">옮길 노선</div>
+      <div class="move-route-row" id="moveRouteSeg">
+        <button type="button" data-route="r1">노선1 (누리1)</button>
+        <button type="button" data-route="r2">노선2 (누리2)</button>
+      </div>
+      <div class="roster-label">옮길 정류장</div>
+      <select class="move-select" id="moveStopSelect"></select>
+      <button class="testbtn" id="moveApplyBtn" type="button" style="margin-top:12px;background:var(--accent);color:var(--accent-fg);border:none;">이 내용으로 이동 적용</button>
+    </div>
+    <div class="roster-label" style="margin-top:16px;">현재 적용된 이동 내역</div>
+    <div id="moveList" class="board-list" style="margin-top:7px;"></div>
+    <div class="empty-roster" id="moveEmpty" hidden>적용된 이동 내역이 없어요.</div>
+  </div>
+
+  <div class="card">
     <details class="help">
       <summary>사용법 · 주의사항 <span class="chev">▸</span></summary>
       <ul class="help-list">
@@ -405,6 +433,7 @@ details[open] summary .chev{transform:rotate(90deg);}
         <li>버스가 출발하기 전, <b>탑승인원 확인</b> 카드에서 오늘 정류장별 탑승 인원을 확인하고 체크해주세요. 체크하지 않으면 추적 시작 버튼이 눌리지 않아요. 결석 처리를 바꾸거나 요일/노선을 바꾸면 체크가 자동으로 풀리니 다시 확인해주세요.</li>
         <li>버스를 타기 전 <b>추적 시작</b>을 누르고, 화면이 꺼지지 않도록 앱을 켜둔 채로 유지하세요. 다른 앱으로 완전히 전환하면 위치 갱신이 늦어질 수 있어요.</li>
         <li>전화 통화·화면 잠금 등으로 위치가 1분 이상 갱신되지 않으면 화면에 <b>⚠ 경고 문구</b>가 뜨고 "마지막 갱신" 숫자가 빨간색으로 바뀝니다. 이 경고가 보이면 앱으로 돌아와 상태를 확인하고, 추적이 멈춘 것 같으면 추적을 중지한 뒤 다시 시작해주세요.</li>
+        <li><b>🔁 원생 이동 · 정류장 변경</b> 카드에서 원생을 선택하면, 호차(노선)나 정류장을 바로 바꿀 수 있어요. 요일을 체크해서 특정 요일만 옮길 수도 있고, 전체 요일을 옮길 수도 있어요. 단, 이미 목록에 있는 정류장들 사이에서만 가능하고 완전히 새로운 정류장은 추가로 말씀해주셔야 해요. "되돌리기"를 누르면 원래 시간표대로 돌아갑니다.</li>
         <li>손글씨 시간표를 옮긴 것이라 이름이 틀렸을 수 있어요. 틀린 이름은 말씀해주시면 바로 고쳐드릴게요.</li>
       </ul>
     </details>
@@ -533,6 +562,7 @@ details[open] summary .chev{transform:rotate(90deg);}
   var LOC_KEY = "getoff-alarm-locations-v2";
   var ATT_KEY = "getoff-alarm-attendance-v2";
   var ROUTE_KEY = "getoff-alarm-route-v2";
+  var OVR_KEY = "getoff-alarm-roster-override-v1"; // 원생 이동(호차/정류장 변경) 영구 덮어쓰기 — 결석과 달리 날짜가 지나도 유지됨
   var EXIT_FACTOR = 1.6;
   var DEFAULT_RADIUS = 120;
   var WEEKEND_FALLBACK = "금"; // 주말(현장테스트 등)엔 금요일 명단을 기본으로 보여준다
@@ -594,6 +624,7 @@ details[open] summary .chev{transform:rotate(90deg);}
   state.locations = loadJSON(LOC_KEY, {});
   state.absence = loadJSON(ATT_KEY, {});
   state.route = loadJSON(ROUTE_KEY, "r1");
+  state.rosterOverride = loadJSON(OVR_KEY, {}); // {이름: {요일: {route, stopId}}}
   var info = todayInfo();
   state.dateStr = info.dateStr;
   state.weekday = info.weekday || WEEKEND_FALLBACK;
@@ -625,8 +656,58 @@ details[open] summary .chev{transform:rotate(90deg);}
     if(day[key]) delete day[key]; else day[key] = true;
     saveJSON(ATT_KEY, state.absence);
   }
+  // 원생 이동(호차/정류장 변경)이 적용된 뒤의 "실제" 명단을 요일별로 계산한다.
+  // override[이름][요일] = {route, stopId} 가 있으면 그 이름은 원래 자리에서 빠지고
+  // 그 route가 지금 보고 있는 노선과 같을 때만 지정된 정류장에 새로 들어간다(노선 간 이동도 여기서 처리됨).
+  function effectiveNamesForDay(route, day){
+    var result = {};
+    ROUTES[route].stops.forEach(function(s){ result[s.id] = (s.days[day] || []).slice(); });
+    var ov = state.rosterOverride || {};
+    Object.keys(ov).forEach(function(name){
+      var dayOv = ov[name] && ov[name][day];
+      if(!dayOv) return;
+      Object.keys(result).forEach(function(stopId){
+        var idx = result[stopId].indexOf(name);
+        if(idx !== -1) result[stopId].splice(idx, 1);
+      });
+      if(dayOv.route === route && result.hasOwnProperty(dayOv.stopId)){
+        if(result[dayOv.stopId].indexOf(name) === -1) result[dayOv.stopId].push(name);
+      }
+    });
+    return result;
+  }
+  function stopNames(stop){
+    return effectiveNamesForDay(state.route, state.weekday)[stop.id] || [];
+  }
+  function stopPlace(route, stopId){
+    var found = null;
+    ROUTES[route].stops.forEach(function(s){ if(s.id === stopId) found = s; });
+    return found ? (found.order + ". " + found.place) : stopId;
+  }
+  // 모든 노선·모든 요일을 뒤져서 "이름이 지금 어느 노선·정류장·요일들에 배정돼있는지"를 모은다(이동 기능의 선택목록용).
+  function allOccurrences(){
+    var seen = {};
+    var list = [];
+    ["r1","r2"].forEach(function(route){
+      DAY_KEYS.forEach(function(day){
+        var map = effectiveNamesForDay(route, day);
+        ROUTES[route].stops.forEach(function(stop){
+          (map[stop.id] || []).forEach(function(name){
+            var key = name + "__" + route + "__" + stop.id;
+            if(!seen[key]){
+              seen[key] = {name:name, route:route, stopId:stop.id, place:stop.place, order:stop.order, days:[]};
+              list.push(seen[key]);
+            }
+            if(seen[key].days.indexOf(day) === -1) seen[key].days.push(day);
+          });
+        });
+      });
+    });
+    list.sort(function(a,b){ return a.name.localeCompare(b.name, "ko"); });
+    return list;
+  }
   function activeRoster(stop){
-    var names = stop.days[state.weekday] || [];
+    var names = stopNames(stop);
     return names.filter(function(n){ return !isAbsent(stop.id, n); });
   }
 
@@ -665,6 +746,9 @@ details[open] summary .chev{transform:rotate(90deg);}
   var elStopsList = $("stopsList");
   var elBoardDayLabel = $("boardDayLabel"), elBoardTotal = $("boardTotal"), elBoardList = $("boardList");
   var elBoardConfirmChk = $("boardConfirmChk"), elBoardConfirmRow = $("boardConfirmRow"), elBoardNote = $("boardNote");
+  var elMoveSelect = $("moveSelect"), elMoveDetail = $("moveDetail"), elMoveDayRow = $("moveDayRow");
+  var elMoveRouteSeg = $("moveRouteSeg"), elMoveStopSelect = $("moveStopSelect"), elMoveApplyBtn = $("moveApplyBtn");
+  var elMoveList = $("moveList"), elMoveEmpty = $("moveEmpty");
   var elVisBanner = $("visBanner");
   var elStaleBanner = $("staleBanner");
   var elStorageBanner = $("storageBanner");
@@ -730,7 +814,7 @@ details[open] summary .chev{transform:rotate(90deg);}
   function countAbsent(){
     var n = 0;
     currentStops().forEach(function(s){
-      (s.days[state.weekday] || []).forEach(function(name){
+      stopNames(s).forEach(function(name){
         if(isAbsent(s.id, name)) n++;
       });
     });
@@ -747,7 +831,7 @@ details[open] summary .chev{transform:rotate(90deg);}
     var totalActive = 0, totalAll = 0;
     elBoardList.innerHTML = "";
     currentStops().forEach(function(s){
-      var names = s.days[state.weekday] || [];
+      var names = stopNames(s);
       var active = activeRoster(s);
       totalActive += active.length;
       totalAll += names.length;
@@ -781,7 +865,7 @@ details[open] summary .chev{transform:rotate(90deg);}
     elStopsList.innerHTML = "";
     stopEls = {};
     currentStops().forEach(function(s){
-      var names = s.days[state.weekday] || [];
+      var names = stopNames(s);
       var active = activeRoster(s);
       var loc = stopLoc(s.id);
 
@@ -1267,6 +1351,138 @@ details[open] summary .chev{transform:rotate(90deg);}
     });
   }
 
+  // ───────── 원생 이동 · 정류장 변경 ─────────
+  var moveState = { occList: [], current: null, destRoute: null, selectedDays: {} };
+
+  function populateMoveStopOptions(route, selectStopId){
+    elMoveStopSelect.innerHTML = "";
+    ROUTES[route].stops.forEach(function(stop){
+      var opt = document.createElement("option");
+      opt.value = stop.id;
+      opt.textContent = stop.order + ". " + stop.place;
+      elMoveStopSelect.appendChild(opt);
+    });
+    if(selectStopId) elMoveStopSelect.value = selectStopId;
+  }
+
+  function renderMoveSelect(){
+    var occ = allOccurrences();
+    moveState.occList = occ;
+    elMoveSelect.innerHTML = "";
+    var placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "— 이동할 원생을 선택하세요 —";
+    elMoveSelect.appendChild(placeholder);
+    occ.forEach(function(o, i){
+      var opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = o.name + " — " + ROUTES[o.route].label + " · " + o.order + "." + o.place + " (" + o.days.join(",") + ")";
+      elMoveSelect.appendChild(opt);
+    });
+    elMoveSelect.value = "";
+    elMoveDetail.hidden = true;
+    moveState.current = null;
+  }
+
+  function renderMoveList(){
+    elMoveList.innerHTML = "";
+    var rows = [];
+    Object.keys(state.rosterOverride).forEach(function(name){
+      var dayMap = state.rosterOverride[name];
+      Object.keys(dayMap).forEach(function(day){
+        rows.push({name:name, day:day, target: dayMap[day]});
+      });
+    });
+    elMoveEmpty.hidden = rows.length > 0;
+    rows.sort(function(a,b){
+      return a.name.localeCompare(b.name, "ko") || (DAY_KEYS.indexOf(a.day) - DAY_KEYS.indexOf(b.day));
+    });
+    rows.forEach(function(r){
+      var row = document.createElement("div");
+      row.className = "move-row";
+      var info = document.createElement("span");
+      info.className = "info";
+      info.textContent = r.name + " · " + r.day + "요일 → " + ROUTES[r.target.route].label + " · " + stopPlace(r.target.route, r.target.stopId);
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "cancel-btn";
+      cancelBtn.textContent = "되돌리기";
+      cancelBtn.addEventListener("click", function(){
+        delete state.rosterOverride[r.name][r.day];
+        if(Object.keys(state.rosterOverride[r.name]).length === 0) delete state.rosterOverride[r.name];
+        saveJSON(OVR_KEY, state.rosterOverride);
+        state.boardingConfirmed = false;
+        renderAll();
+        renderMoveSelect();
+        renderMoveList();
+      });
+      row.appendChild(info);
+      row.appendChild(cancelBtn);
+      elMoveList.appendChild(row);
+    });
+  }
+
+  elMoveSelect.addEventListener("change", function(){
+    var idx = elMoveSelect.value;
+    if(idx === ""){ elMoveDetail.hidden = true; moveState.current = null; return; }
+    var o = moveState.occList[parseInt(idx, 10)];
+    moveState.current = o;
+    moveState.destRoute = o.route;
+    elMoveDetail.hidden = false;
+    elMoveDayRow.innerHTML = "";
+    moveState.selectedDays = {};
+    DAY_KEYS.forEach(function(dk){
+      var checked = o.days.indexOf(dk) !== -1;
+      moveState.selectedDays[dk] = checked;
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "day-chip" + (checked ? " active" : "");
+      b.textContent = dk;
+      b.addEventListener("click", function(){
+        moveState.selectedDays[dk] = !moveState.selectedDays[dk];
+        b.classList.toggle("active", moveState.selectedDays[dk]);
+      });
+      elMoveDayRow.appendChild(b);
+    });
+    Array.prototype.forEach.call(elMoveRouteSeg.querySelectorAll("button"), function(btn){
+      btn.classList.toggle("active", btn.dataset.route === moveState.destRoute);
+    });
+    populateMoveStopOptions(moveState.destRoute, o.stopId);
+  });
+
+  Array.prototype.forEach.call(elMoveRouteSeg.querySelectorAll("button"), function(btn){
+    btn.addEventListener("click", function(){
+      moveState.destRoute = btn.dataset.route;
+      Array.prototype.forEach.call(elMoveRouteSeg.querySelectorAll("button"), function(b){
+        b.classList.toggle("active", b === btn);
+      });
+      populateMoveStopOptions(moveState.destRoute, null);
+    });
+  });
+
+  elMoveApplyBtn.addEventListener("click", function(){
+    var o = moveState.current;
+    if(!o) return;
+    var days = DAY_KEYS.filter(function(dk){ return moveState.selectedDays[dk]; });
+    if(!days.length){ alert("이동할 요일을 1개 이상 선택해주세요."); return; }
+    var destRoute = moveState.destRoute;
+    var destStopId = elMoveStopSelect.value;
+    if(destRoute === o.route && destStopId === o.stopId){
+      alert("현재와 같은 노선·정류장이에요. 다른 곳을 선택해주세요.");
+      return;
+    }
+    if(!state.rosterOverride[o.name]) state.rosterOverride[o.name] = {};
+    days.forEach(function(dk){
+      state.rosterOverride[o.name][dk] = { route: destRoute, stopId: destStopId };
+    });
+    saveJSON(OVR_KEY, state.rosterOverride);
+    state.boardingConfirmed = false;
+    renderAll();
+    renderMoveSelect();
+    renderMoveList();
+    alert("✅ " + o.name + " 원생을 " + days.join(",") + " 요일에 " + ROUTES[destRoute].label + " · " + stopPlace(destRoute, destStopId) + "로 옮겼어요.");
+  });
+
   function renderAll(){
     renderStatusPill();
     renderRouteButtons();
@@ -1278,6 +1494,8 @@ details[open] summary .chev{transform:rotate(90deg);}
   }
 
   renderAll();
+  renderMoveSelect();
+  renderMoveList();
 })();
 </script>
 
