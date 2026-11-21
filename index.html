@@ -202,6 +202,17 @@ h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;margin:0;letter-spacin
 }
 .seg button.active{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);}
 .seg button:disabled{opacity:.5;}
+.board-total{font-family:'Space Grotesk',system-ui,sans-serif;font-size:19px;font-weight:700;margin-bottom:10px;}
+.board-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+.board-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13.5px;padding:8px 11px;border-radius:9px;background:var(--surface-2);}
+.board-row .nm{color:var(--fg);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.board-row .ct{font-weight:700;flex-shrink:0;font-variant-numeric:tabular-nums;}
+.board-row.zero .ct{color:var(--fg-dim);}
+.board-confirm{display:flex;align-items:center;gap:9px;padding-top:12px;border-top:1px solid var(--border);cursor:pointer;}
+.board-confirm input{width:20px;height:20px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+.board-confirm span{font-size:13.5px;font-weight:700;color:var(--fg-dim);}
+.board-confirm.ok span{color:var(--good);}
+.board-note{font-size:12px;color:var(--fg-dim);margin-top:6px;}
 .day-row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
 .day-chip{
   border:1px solid var(--border);background:transparent;color:var(--fg-dim);
@@ -332,6 +343,18 @@ details[open] summary .chev{transform:rotate(90deg);}
     <div class="today-line" id="todayLine"></div>
   </div>
 
+  <div class="card" id="boardCard">
+    <h2 class="section-title">🧑‍🤝‍🧑 탑승인원 확인</h2>
+    <p class="section-sub">출발 전 오늘(<span id="boardDayLabel">월</span>) 실제 탑승 인원을 정류장별로 확인해주세요. 결석 체크나 요일을 바꾸면 다시 확인해야 추적을 시작할 수 있어요.</p>
+    <div class="board-total" id="boardTotal">총 0 / 0명 탑승</div>
+    <div id="boardList" class="board-list"></div>
+    <label class="board-confirm" id="boardConfirmRow">
+      <input type="checkbox" id="boardConfirmChk">
+      <span>탑승인원을 확인했습니다</span>
+    </label>
+    <div class="board-note" id="boardNote" hidden>⚠ 탑승인원을 확인해야 추적을 시작할 수 있어요.</div>
+  </div>
+
   <div class="card">
     <div class="track-head"><h2>위치 추적</h2></div>
     <button class="trackbtn" id="trackBtn" type="button">
@@ -377,6 +400,7 @@ details[open] summary .chev{transform:rotate(90deg);}
         <li>정류장 위치는 입력창에 <b>주소/건물명</b>을 쓰고 "저장"을 누르면 자동으로 검색해 1순위 결과를 바로 저장해요. (다만 작은 카페·학원 같은 상호는 지도 데이터에 없어 검색이 안 될 수 있어요)</li>
         <li>검색이 안 되면 같은 입력창에 <b>"위도, 경도"</b>(예: 34.8538, 128.4336)를 직접 입력하고 "저장"을 눌러도 돼요. 네이버지도/카카오맵에서 그 장소를 길게 눌러 나오는 좌표를 복사해서 붙여넣으면 됩니다.</li>
         <li>가장 정확하게 하고 싶으면, 실제로 그 자리에 있을 때 <b>"현재 위치로 등록(정확)"</b>을 눌러 GPS 좌표로 덮어쓸 수 있어요. 한 번 등록해두면 다음부터는 다시 할 필요 없어요.</li>
+        <li>버스가 출발하기 전, <b>탑승인원 확인</b> 카드에서 오늘 정류장별 탑승 인원을 확인하고 체크해주세요. 체크하지 않으면 추적 시작 버튼이 눌리지 않아요. 결석 처리를 바꾸거나 요일/노선을 바꾸면 체크가 자동으로 풀리니 다시 확인해주세요.</li>
         <li>버스를 타기 전 <b>추적 시작</b>을 누르고, 화면이 꺼지지 않도록 앱을 켜둔 채로 유지하세요. 다른 앱으로 완전히 전환하면 위치 갱신이 늦어질 수 있어요.</li>
         <li>손글씨 시간표를 옮긴 것이라 이름이 틀렸을 수 있어요. 틀린 이름은 말씀해주시면 바로 고쳐드릴게요.</li>
       </ul>
@@ -525,7 +549,8 @@ details[open] summary .chev{transform:rotate(90deg);}
     sirenTimer: null,
     vibTimer: null,
     audioCtx: null,
-    fired: {}
+    fired: {},
+    boardingConfirmed: false
   };
 
   function pad(n){ return (n<10?"0":"")+n; }
@@ -633,6 +658,8 @@ details[open] summary .chev{transform:rotate(90deg);}
   var elStatAccuracy = $("statAccuracy"), elStatUpdated = $("statUpdated"), elStatNearest = $("statNearest");
   var elSoundToggle = $("soundToggle"), elTestAlarmBtn = $("testAlarmBtn");
   var elStopsList = $("stopsList");
+  var elBoardDayLabel = $("boardDayLabel"), elBoardTotal = $("boardTotal"), elBoardList = $("boardList");
+  var elBoardConfirmChk = $("boardConfirmChk"), elBoardConfirmRow = $("boardConfirmRow"), elBoardNote = $("boardNote");
   var elVisBanner = $("visBanner");
   var elStorageBanner = $("storageBanner");
   if(!STORAGE_OK && elStorageBanner){ elStorageBanner.hidden = false; }
@@ -668,6 +695,7 @@ details[open] summary .chev{transform:rotate(90deg);}
       b.addEventListener("click", function(){
         if(state.tracking) return;
         state.weekday = dk;
+        state.boardingConfirmed = false;
         renderAll();
       });
       elDayRow.appendChild(b);
@@ -702,6 +730,46 @@ details[open] summary .chev{transform:rotate(90deg);}
     });
     return n;
   }
+
+  function updateTrackBtnEnabled(){
+    elTrackBtn.disabled = !state.tracking && !state.boardingConfirmed;
+    elBoardNote.hidden = state.tracking || state.boardingConfirmed;
+  }
+
+  function renderBoarding(){
+    elBoardDayLabel.textContent = state.weekday;
+    var totalActive = 0, totalAll = 0;
+    elBoardList.innerHTML = "";
+    currentStops().forEach(function(s){
+      var names = s.days[state.weekday] || [];
+      var active = activeRoster(s);
+      totalActive += active.length;
+      totalAll += names.length;
+      if(names.length === 0) return;
+      var row = document.createElement("div");
+      row.className = "board-row" + (active.length === 0 ? " zero" : "");
+      var nm = document.createElement("span");
+      nm.className = "nm";
+      nm.textContent = s.order + ". " + s.place;
+      var ct = document.createElement("span");
+      ct.className = "ct";
+      ct.textContent = active.length + "/" + names.length + "명";
+      row.appendChild(nm);
+      row.appendChild(ct);
+      elBoardList.appendChild(row);
+    });
+    elBoardTotal.textContent = "총 " + totalActive + " / " + totalAll + "명 탑승";
+    elBoardConfirmChk.disabled = state.tracking;
+    elBoardConfirmChk.checked = state.boardingConfirmed;
+    elBoardConfirmRow.classList.toggle("ok", state.boardingConfirmed);
+    updateTrackBtnEnabled();
+  }
+
+  elBoardConfirmChk.addEventListener("change", function(){
+    state.boardingConfirmed = elBoardConfirmChk.checked;
+    elBoardConfirmRow.classList.toggle("ok", state.boardingConfirmed);
+    updateTrackBtnEnabled();
+  });
 
   var stopEls = {};
   function renderStops(){
@@ -875,7 +943,9 @@ details[open] summary .chev{transform:rotate(90deg);}
           chip.textContent = absent ? (name + " (결석)") : name;
           chip.addEventListener("click", function(){
             toggleAbsent(s.id, name);
+            state.boardingConfirmed = false;
             renderStops();
+            renderBoarding();
           });
           roster.appendChild(chip);
         });
@@ -1087,12 +1157,14 @@ details[open] summary .chev{transform:rotate(90deg);}
     renderStatusPill();
     renderRouteButtons();
     renderDayRow();
+    renderBoarding();
   }
   function stopTracking(){
     state.tracking = false;
     if(state.watchId !== null){ navigator.geolocation.clearWatch(state.watchId); }
     state.watchId = null;
     releaseWakeLock();
+    state.boardingConfirmed = false;
     elTrackBtn.classList.add("stop");
     elTrackBtnLabel.textContent = "추적 시작";
     elTrackBtn.firstElementChild.textContent = "▶";
@@ -1101,20 +1173,28 @@ details[open] summary .chev{transform:rotate(90deg);}
     renderRouteButtons();
     renderDayRow();
     renderStops();
+    renderBoarding();
   }
   elTrackBtn.addEventListener("click", function(){
-    if(state.tracking) stopTracking(); else startTracking();
+    if(state.tracking){ stopTracking(); return; }
+    if(!state.boardingConfirmed){
+      alert("먼저 위의 \"탑승인원 확인\"에서 오늘 탑승 인원을 확인하고 체크해주세요.");
+      return;
+    }
+    startTracking();
   });
 
   elRouteBtn1.addEventListener("click", function(){
     if(state.tracking) return;
     state.route = "r1";
+    state.boardingConfirmed = false;
     saveJSON(ROUTE_KEY, state.route);
     renderAll();
   });
   elRouteBtn2.addEventListener("click", function(){
     if(state.tracking) return;
     state.route = "r2";
+    state.boardingConfirmed = false;
     saveJSON(ROUTE_KEY, state.route);
     renderAll();
   });
@@ -1170,6 +1250,7 @@ details[open] summary .chev{transform:rotate(90deg);}
     renderDayRow();
     renderStatsIdle();
     renderStops();
+    renderBoarding();
     renderDiag();
   }
 
