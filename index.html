@@ -253,6 +253,16 @@ h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;margin:0;letter-spacin
 }
 .addr-result:active{background:var(--surface-2);}
 .or-sep{font-size:11px;color:var(--fg-dim);text-align:center;margin:12px 0 2px;text-transform:uppercase;letter-spacing:.06em;}
+.manual-row{display:flex;gap:8px;margin-top:9px;}
+.manual-input{
+  flex:1;min-width:0;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);
+  border-radius:9px;padding:9px 11px;font-size:13.5px;font-family:inherit;
+}
+.manual-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.manual-btn{
+  border:1px solid var(--border);background:transparent;color:var(--fg);
+  border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;
+}
 .roster-label{font-size:12px;color:var(--fg-dim);margin-top:11px;font-weight:600;}
 .roster{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px;}
 .chip{
@@ -363,8 +373,9 @@ details[open] summary .chev{transform:rotate(90deg);}
         <li>정류장 목록은 첨부해주신 학원버스 시간표(엑셀)를 그대로 옮겨온 것이에요. 요일을 바꾸면 그날 탑승 명단이 자동으로 바뀝니다.</li>
         <li>이름을 탭해서 <b>결석</b> 처리하면 그 원생은 오늘 하차 명단과 알람에서 빠집니다. 다시 탭하면 출석으로 돌아와요.</li>
         <li>결석 처리는 오늘 날짜 기준으로만 적용돼요. 내일 다시 열면 전원 출석으로 초기화됩니다.</li>
-        <li>정류장 위치는 기본적으로 <b>주소나 건물명을 입력해서 찾기</b>로 등록해요. 검색 결과 중 맞는 곳을 탭하면 바로 저장됩니다.</li>
-        <li>더 정확하게 하고 싶으면, 실제로 그 자리에 있을 때 <b>"현재 위치로 등록(정확)"</b>을 눌러 GPS 좌표로 덮어쓸 수 있어요. 한 번 등록해두면 다음부터는 다시 할 필요 없어요.</li>
+        <li>정류장 위치는 <b>주소나 건물명을 입력해서 찾기</b>로 등록해요. 검색 결과 중 맞는 곳을 탭하면 바로 저장됩니다. (다만 작은 카페·학원 같은 상호는 지도 데이터에 없어 검색이 안 될 수 있어요)</li>
+        <li>검색이 안 되면 <b>"위도, 경도 직접 입력"</b>을 쓰세요. 네이버지도/카카오맵에서 그 장소를 길게 눌러 나오는 좌표를 복사해 "34.8538, 128.4336" 형식으로 붙여넣으면 됩니다.</li>
+        <li>가장 정확하게 하고 싶으면, 실제로 그 자리에 있을 때 <b>"현재 위치로 등록(정확)"</b>을 눌러 GPS 좌표로 덮어쓸 수 있어요. 한 번 등록해두면 다음부터는 다시 할 필요 없어요.</li>
         <li>버스를 타기 전 <b>추적 시작</b>을 누르고, 화면이 꺼지지 않도록 앱을 켜둔 채로 유지하세요. 다른 앱으로 완전히 전환하면 위치 갱신이 늦어질 수 있어요.</li>
         <li>손글씨 시간표를 옮긴 것이라 이름이 틀렸을 수 있어요. 틀린 이름은 말씀해주시면 바로 고쳐드릴게요.</li>
       </ul>
@@ -670,8 +681,10 @@ details[open] summary .chev{transform:rotate(90deg);}
     return n;
   }
 
+  var stopEls = {};
   function renderStops(){
     elStopsList.innerHTML = "";
+    stopEls = {};
     currentStops().forEach(function(s){
       var names = s.days[state.weekday] || [];
       var active = activeRoster(s);
@@ -701,12 +714,14 @@ details[open] summary .chev{transform:rotate(90deg);}
       top.appendChild(no);
       top.appendChild(main);
 
+      var distEl = document.createElement("div");
+      distEl.className = "stop-dist";
+      distEl.hidden = true;
+      top.appendChild(distEl);
       if(state.tracking && state.lastPos && loc){
         var d = distanceMeters(state.lastPos.latitude, state.lastPos.longitude, loc.lat, loc.lng);
-        var distEl = document.createElement("div");
-        distEl.className = "stop-dist";
+        distEl.hidden = false;
         distEl.textContent = fmtDist(d);
-        top.appendChild(distEl);
         if(d <= (loc.radius || DEFAULT_RADIUS)) card.classList.add("near");
       }
       card.appendChild(top);
@@ -718,6 +733,9 @@ details[open] summary .chev{transform:rotate(90deg);}
       } else if(loc.source === "address"){
         badge.className = "gps-badge ok";
         badge.textContent = "📍 주소로 등록됨";
+      } else if(loc.source === "manual"){
+        badge.className = "gps-badge ok";
+        badge.textContent = "📍 좌표 직접입력됨";
       } else {
         badge.className = "gps-badge ok";
         badge.textContent = "📍 현재위치로 등록 (±" + Math.round(loc.acc||0) + "m)";
@@ -775,10 +793,46 @@ details[open] summary .chev{transform:rotate(90deg);}
         });
       });
 
-      var sep = document.createElement("div");
-      sep.className = "or-sep";
-      sep.textContent = "또는";
-      card.appendChild(sep);
+      var sep1 = document.createElement("div");
+      sep1.className = "or-sep";
+      sep1.textContent = "또는";
+      card.appendChild(sep1);
+
+      var manualRow = document.createElement("div");
+      manualRow.className = "manual-row";
+      var manualInput = document.createElement("input");
+      manualInput.type = "text";
+      manualInput.className = "manual-input";
+      manualInput.placeholder = "위도, 경도 (예: 34.8538, 128.4336)";
+      if(loc && loc.source === "manual") manualInput.value = loc.lat.toFixed(6) + ", " + loc.lng.toFixed(6);
+      var manualBtn = document.createElement("button");
+      manualBtn.type = "button";
+      manualBtn.className = "manual-btn";
+      manualBtn.textContent = "좌표 저장";
+      manualRow.appendChild(manualInput);
+      manualRow.appendChild(manualBtn);
+      card.appendChild(manualRow);
+      var manualStatus = document.createElement("div");
+      manualStatus.className = "addr-status";
+      card.appendChild(manualStatus);
+      manualBtn.addEventListener("click", function(){
+        var parts = manualInput.value.split(",").map(function(x){ return parseFloat(x.trim()); });
+        if(parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])){
+          manualStatus.textContent = "위도,경도를 \"34.8538, 128.4336\" 형식으로 입력해주세요.";
+          return;
+        }
+        if(Math.abs(parts[0]) > 90 || Math.abs(parts[1]) > 180){
+          manualStatus.textContent = "값이 위도·경도 범위를 벗어났어요. 순서(위도, 경도)를 확인해주세요.";
+          return;
+        }
+        setStopLoc(s.id, parts[0], parts[1], null, "manual", null);
+        renderStops();
+      });
+
+      var sep2 = document.createElement("div");
+      sep2.className = "or-sep";
+      sep2.textContent = "또는";
+      card.appendChild(sep2);
 
       var gpsRow = document.createElement("div");
       gpsRow.className = "gps-row";
@@ -820,6 +874,26 @@ details[open] summary .chev{transform:rotate(90deg);}
       }
 
       elStopsList.appendChild(card);
+      stopEls[s.id] = {card: card, dist: distEl};
+    });
+  }
+
+  function updateStopCardDistances(){
+    if(!state.lastPos) return;
+    currentStops().forEach(function(s){
+      var entry = stopEls[s.id];
+      if(!entry) return;
+      var loc = stopLoc(s.id);
+      if(!loc){
+        entry.dist.hidden = true;
+        entry.dist.textContent = "";
+        entry.card.classList.remove("near");
+        return;
+      }
+      var d = distanceMeters(state.lastPos.latitude, state.lastPos.longitude, loc.lat, loc.lng);
+      entry.dist.hidden = false;
+      entry.dist.textContent = fmtDist(d);
+      entry.card.classList.toggle("near", d <= (loc.radius || DEFAULT_RADIUS));
     });
   }
 
@@ -975,7 +1049,7 @@ details[open] summary .chev{transform:rotate(90deg);}
     } else {
       elStatNearest.textContent = "정류장 위치를 먼저 등록해주세요";
     }
-    renderStops();
+    updateStopCardDistances();
   }
   function onPosError(err){
     elStatAccuracy.textContent = "오류";
