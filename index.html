@@ -769,9 +769,9 @@ details[open] summary .chev{transform:rotate(90deg);}
             });
             addrResults.appendChild(rb);
           });
-        }, function(){
+        }, function(err){
           addrBtn.disabled = false;
-          addrStatus.textContent = "검색에 실패했어요. 잠시 후 다시 시도해주세요.";
+          addrStatus.textContent = "검색에 실패했어요. 잠시 후 다시 시도해주세요" + (err && err.message ? (" (" + err.message + ")") : "") + ".";
         });
       });
 
@@ -842,8 +842,10 @@ details[open] summary .chev{transform:rotate(90deg);}
   }
 
   function geocodeAddress(query, onResults, onError){
-    var url = "https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=kr&accept-language=ko&addressdetails=0&q=" + encodeURIComponent(query);
-    fetch(url, {headers: {"Accept": "application/json"}})
+    // 캐시서버가 CORS 헤더 없이 응답을 캐싱해두는 경우가 있어, 매 요청마다
+    // 캐시미스를 유도하는 더미 파라미터(_ts)를 붙여 신선한 응답을 받는다.
+    var url = "https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=kr&accept-language=ko&addressdetails=0&_ts=" + Date.now() + "&q=" + encodeURIComponent(query);
+    fetch(url, {headers: {"Accept": "application/json"}, cache: "no-store"})
       .then(function(resp){
         if(!resp.ok) throw new Error("HTTP " + resp.status);
         return resp.json();
