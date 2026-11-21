@@ -319,6 +319,7 @@ details[open] summary .chev{transform:rotate(90deg);}
 <div class="wrap">
 
   <div class="banner" id="visBanner" hidden>⚠ 화면을 벗어나면 위치 갱신이 느려질 수 있어요. 앱을 켜둔 채로 유지해주세요.</div>
+  <div class="banner" id="storageBanner" hidden>⚠ 이 화면에서는 등록 내용이 저장되지 않을 수 있어요. 홈 화면에 추가한 아이콘으로 열어주세요(텔레그램·카카오톡 등 다른 앱 안의 브라우저로 열면 저장이 안 될 수 있습니다).</div>
 
   <div class="card">
     <h2 class="section-title">노선 선택</h2>
@@ -373,8 +374,8 @@ details[open] summary .chev{transform:rotate(90deg);}
         <li>정류장 목록은 첨부해주신 학원버스 시간표(엑셀)를 그대로 옮겨온 것이에요. 요일을 바꾸면 그날 탑승 명단이 자동으로 바뀝니다.</li>
         <li>이름을 탭해서 <b>결석</b> 처리하면 그 원생은 오늘 하차 명단과 알람에서 빠집니다. 다시 탭하면 출석으로 돌아와요.</li>
         <li>결석 처리는 오늘 날짜 기준으로만 적용돼요. 내일 다시 열면 전원 출석으로 초기화됩니다.</li>
-        <li>정류장 위치는 <b>주소나 건물명을 입력해서 찾기</b>로 등록해요. 검색 결과 중 맞는 곳을 탭하면 바로 저장됩니다. (다만 작은 카페·학원 같은 상호는 지도 데이터에 없어 검색이 안 될 수 있어요)</li>
-        <li>검색이 안 되면 <b>"위도, 경도 직접 입력"</b>을 쓰세요. 네이버지도/카카오맵에서 그 장소를 길게 눌러 나오는 좌표를 복사해 "34.8538, 128.4336" 형식으로 붙여넣으면 됩니다.</li>
+        <li>정류장 위치는 입력창에 <b>주소/건물명</b>을 쓰고 "저장"을 누르면 자동으로 검색해 1순위 결과를 바로 저장해요. (다만 작은 카페·학원 같은 상호는 지도 데이터에 없어 검색이 안 될 수 있어요)</li>
+        <li>검색이 안 되면 같은 입력창에 <b>"위도, 경도"</b>(예: 34.8538, 128.4336)를 직접 입력하고 "저장"을 눌러도 돼요. 네이버지도/카카오맵에서 그 장소를 길게 눌러 나오는 좌표를 복사해서 붙여넣으면 됩니다.</li>
         <li>가장 정확하게 하고 싶으면, 실제로 그 자리에 있을 때 <b>"현재 위치로 등록(정확)"</b>을 눌러 GPS 좌표로 덮어쓸 수 있어요. 한 번 등록해두면 다음부터는 다시 할 필요 없어요.</li>
         <li>버스를 타기 전 <b>추적 시작</b>을 누르고, 화면이 꺼지지 않도록 앱을 켜둔 채로 유지하세요. 다른 앱으로 완전히 전환하면 위치 갱신이 늦어질 수 있어요.</li>
         <li>손글씨 시간표를 옮긴 것이라 이름이 틀렸을 수 있어요. 틀린 이름은 말씀해주시면 바로 고쳐드릴게요.</li>
@@ -540,6 +541,16 @@ details[open] summary .chev{transform:rotate(90deg);}
   function saveJSON(key, obj){
     try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){}
   }
+  function storageAvailable(){
+    try{
+      var k = "__getoff_alarm_test__";
+      localStorage.setItem(k, "1");
+      var ok = localStorage.getItem(k) === "1";
+      localStorage.removeItem(k);
+      return ok;
+    }catch(e){ return false; }
+  }
+  var STORAGE_OK = storageAvailable();
 
   state.locations = loadJSON(LOC_KEY, {});
   state.absence = loadJSON(ATT_KEY, {});
@@ -614,6 +625,8 @@ details[open] summary .chev{transform:rotate(90deg);}
   var elSoundToggle = $("soundToggle"), elTestAlarmBtn = $("testAlarmBtn");
   var elStopsList = $("stopsList");
   var elVisBanner = $("visBanner");
+  var elStorageBanner = $("storageBanner");
+  if(!STORAGE_OK && elStorageBanner){ elStorageBanner.hidden = false; }
   var elAlarmOverlay = $("alarmOverlay"), elAlarmPlace = $("alarmPlace"), elAlarmNames = $("alarmNames"), elAlarmDismissBtn = $("alarmDismissBtn");
 
   function renderStatusPill(){
@@ -741,17 +754,24 @@ details[open] summary .chev{transform:rotate(90deg);}
         badge.textContent = "📍 현재위치로 등록 (±" + Math.round(loc.acc||0) + "m)";
       }
 
+      var addrHint = document.createElement("div");
+      addrHint.className = "roster-label";
+      addrHint.textContent = "정류장 위치 등록";
+      card.appendChild(addrHint);
+
       var addrRow = document.createElement("div");
       addrRow.className = "addr-row";
       var addrInput = document.createElement("input");
       addrInput.type = "text";
       addrInput.className = "addr-input";
-      addrInput.placeholder = "주소나 건물명 입력 (예: 경남 통영시 ...)";
-      if(loc && loc.source === "address" && loc.label) addrInput.value = loc.label;
+      addrInput.placeholder = "주소/건물명 또는 \"위도, 경도\" (예: 34.8538, 128.4336)";
+      if(loc && (loc.source === "address" || loc.source === "manual")){
+        addrInput.value = loc.label || (loc.lat.toFixed(6) + ", " + loc.lng.toFixed(6));
+      }
       var addrBtn = document.createElement("button");
       addrBtn.type = "button";
       addrBtn.className = "addr-btn";
-      addrBtn.textContent = "주소로 찾기";
+      addrBtn.textContent = "저장";
       addrRow.appendChild(addrInput);
       addrRow.appendChild(addrBtn);
       card.appendChild(addrRow);
@@ -765,14 +785,26 @@ details[open] summary .chev{transform:rotate(90deg);}
 
       addrBtn.addEventListener("click", function(){
         var q = addrInput.value.trim();
-        if(!q){ addrStatus.textContent = "주소를 입력해주세요."; return; }
-        addrStatus.textContent = "검색 중…";
+        if(!q){ addrStatus.textContent = "주소나 좌표를 입력해주세요."; return; }
         addrResults.innerHTML = "";
+
+        var coordParts = q.split(",").map(function(x){ return parseFloat(x.trim()); });
+        var looksLikeCoord = coordParts.length === 2 && !isNaN(coordParts[0]) && !isNaN(coordParts[1]) &&
+          Math.abs(coordParts[0]) <= 90 && Math.abs(coordParts[1]) <= 180;
+        if(looksLikeCoord){
+          setStopLoc(s.id, coordParts[0], coordParts[1], null, "manual", null);
+          badge.className = "gps-badge ok";
+          badge.textContent = "📍 좌표 직접입력됨";
+          addrStatus.textContent = "✅ 좌표로 저장됐어요.";
+          return;
+        }
+
+        addrStatus.textContent = "검색 중…";
         addrBtn.disabled = true;
         geocodeAddress(q, function(results){
           addrBtn.disabled = false;
           if(!results.length){
-            addrStatus.textContent = "검색 결과가 없어요(저장 안 됨). 더 자세히(동·건물명 포함) 입력하거나, 아래 \"위도, 경도 직접 입력\"을 이용해주세요.";
+            addrStatus.textContent = "검색 결과가 없어요(저장 안 됨). 더 자세히 입력하거나, 네이버지도 등에서 복사한 \"위도, 경도\"를 입력해주세요.";
             return;
           }
           var first = results[0];
@@ -795,42 +827,6 @@ details[open] summary .chev{transform:rotate(90deg);}
           addrBtn.disabled = false;
           addrStatus.textContent = "검색에 실패했어요. 잠시 후 다시 시도해주세요" + (err && err.message ? (" (" + err.message + ")") : "") + ".";
         });
-      });
-
-      var sep1 = document.createElement("div");
-      sep1.className = "or-sep";
-      sep1.textContent = "또는";
-      card.appendChild(sep1);
-
-      var manualRow = document.createElement("div");
-      manualRow.className = "manual-row";
-      var manualInput = document.createElement("input");
-      manualInput.type = "text";
-      manualInput.className = "manual-input";
-      manualInput.placeholder = "위도, 경도 (예: 34.8538, 128.4336)";
-      if(loc && loc.source === "manual") manualInput.value = loc.lat.toFixed(6) + ", " + loc.lng.toFixed(6);
-      var manualBtn = document.createElement("button");
-      manualBtn.type = "button";
-      manualBtn.className = "manual-btn";
-      manualBtn.textContent = "좌표 저장";
-      manualRow.appendChild(manualInput);
-      manualRow.appendChild(manualBtn);
-      card.appendChild(manualRow);
-      var manualStatus = document.createElement("div");
-      manualStatus.className = "addr-status";
-      card.appendChild(manualStatus);
-      manualBtn.addEventListener("click", function(){
-        var parts = manualInput.value.split(",").map(function(x){ return parseFloat(x.trim()); });
-        if(parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])){
-          manualStatus.textContent = "위도,경도를 \"34.8538, 128.4336\" 형식으로 입력해주세요.";
-          return;
-        }
-        if(Math.abs(parts[0]) > 90 || Math.abs(parts[1]) > 180){
-          manualStatus.textContent = "값이 위도·경도 범위를 벗어났어요. 순서(위도, 경도)를 확인해주세요.";
-          return;
-        }
-        setStopLoc(s.id, parts[0], parts[1], null, "manual", null);
-        renderStops();
       });
 
       var sep2 = document.createElement("div");
