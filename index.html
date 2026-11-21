@@ -745,7 +745,6 @@ details[open] summary .chev{transform:rotate(90deg);}
       var active = activeRoster(s);
       totalActive += active.length;
       totalAll += names.length;
-      if(names.length === 0) return;
       var row = document.createElement("div");
       row.className = "board-row" + (active.length === 0 ? " zero" : "");
       var nm = document.createElement("span");
